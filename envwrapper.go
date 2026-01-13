@@ -61,7 +61,7 @@ var (
 //	defer envwrapper.WipeSecrets(env)
 //
 // envwrapper loads any .env file in the current path. Filenames are optional to manually load one or more .env files.
-func Parse(cfg map[string]any, filenames ...string) *map[string]any {
+func Parse(cfg map[string]any, filenames ...string) map[string]any {
 	err := godotenv.Load(filenames...)
 	if err != nil {
 		panic(fmt.Errorf(".env not found: %w", err))
@@ -71,7 +71,7 @@ func Parse(cfg map[string]any, filenames ...string) *map[string]any {
 	for key, defaultKey := range cfg {
 		env[key] = resolve(key, defaultKey)
 	}
-	return &env
+	return env
 }
 
 // WipeSecrets should be called as a deferred function in main after Parse if the secrets, passwords, or
