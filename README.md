@@ -10,7 +10,7 @@ map[slice]any and returns a new map with all the values in the correct type.
 
 ### func [Parse](https://github.com/glenntam/envwrapper/blob/main/envwrapper.go#L64)
 
-`func Parse(cfg map[string]any, filenames ...string) *map[string]any`
+`func Parse(cfg map[string]any, filenames ...string) map[string]any`
 
 Parse reads the structure of cfg, a map[string]any, and returns a pointer to a
 new map where keys = 'string' and values = the corresponding environment variable
@@ -29,7 +29,7 @@ cfg := map[string]any{
     "USE_SSL":     true,
 }
 env := envwrapper.Parse(cfg)
-(e.g.) sendMail(env["MY_SERVER"], env["MY_PORT"], env["MY_PASSWORD"])
+(e.g.) sendMail(env["MY_SERVER"].(string), env["MY_PORT"].(int), env["MY_PASSWORD"].([]byte), env["USE_SSL"].(bool))
 ```
 
 Also, required values without a stipulated default can be passed a nil pointer to that specific type:

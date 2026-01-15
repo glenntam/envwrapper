@@ -35,7 +35,7 @@ var (
 //	    "USE_SSL":     true,
 //	}
 //	env := envwrapper.Parse(cfg)
-//	(e.g.) sendMail(env["MY_SERVER"], env["MY_PORT"], env["MY_PASSWORD"])
+//	(e.g.) sendMail(env["MY_SERVER"].(string), env["MY_PORT"].(int), env["MY_PASSWORD"].([]byte), env["USE_SSL"].(bool))
 //
 // Also, required values without a stipulated default can be passed a nil pointer to that specific type:
 // Example 2:
