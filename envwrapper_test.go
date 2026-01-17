@@ -67,13 +67,13 @@ BOOL=false
 
 	env := Parse(cfg)
 
-	if (*env)["STR"] != "value" {
+	if env.Str["STR"] != "value" {
 		t.Fatalf("string mismatch")
 	}
-	if (*env)["INT"] != 123 {
+	if env.Int["INT"] != 123 {
 		t.Fatalf("int mismatch")
 	}
-	if (*env)["BOOL"] != false {
+	if env.Bool["BOOL"] != false {
 		t.Fatalf("bool mismatch")
 	}
 }
@@ -93,13 +93,13 @@ BOOL=not-a-bool
 
 	env := Parse(cfg)
 
-	if (*env)["STR"] != "default" {
+	if env.Str["STR"] != "default" {
 		t.Fatalf("expected default string")
 	}
-	if (*env)["INT"] != 42 {
+	if env.Int["INT"] != 42 {
 		t.Fatalf("expected default int")
 	}
-	if (*env)["BOOL"] != true {
+	if env.Bool["BOOL"] != true {
 		t.Fatalf("expected default bool")
 	}
 }
@@ -115,14 +115,9 @@ BYTES=secret
 
 	env := Parse(cfg)
 
-	val, ok := (*env)["BYTES"]
+	b, ok := env.Bytes["BYTES"]
 	if !ok {
 		t.Fatalf("BYTES missing")
-	}
-
-	b, ok := val.([]byte)
-	if !ok {
-		t.Fatalf("wrong type: %T", val)
 	}
 	if string(b) != "secret" {
 		t.Fatalf("unexpected value")
@@ -192,10 +187,9 @@ BYTES=secret
 
 	env := Parse(cfg)
 
-	val := (*env)["BYTES"]
-	b, ok := val.([]byte)
+	b, ok := env.Bytes["BYTES"]
 	if !ok {
-		t.Fatalf("wrong type: %T", val)
+		t.Fatalf("BYTES missing")
 	}
 	if string(b) != "secret" {
 		t.Fatalf("unexpected bytes")
@@ -219,19 +213,23 @@ func TestParse_UnsupportedTypePanics(t *testing.T) {
 }
 
 func TestWipeSecrets(t *testing.T) {
-	secret := []byte("topsecret")
-
-	env := map[string]any{
-		"A": secret,
-		"B": 123,
+	env := &EnvParsed{
+		Str:   make(map[string]string),
+		Int:   make(map[string]int),
+		Bool:  make(map[string]bool),
+		Bytes: make(map[string][]byte),
 	}
 
-	WipeSecrets(&env)
+	secret := []byte("topsecret")
+	env.Bytes["A"] = secret
+	env.Int["B"] = 123
 
-	if _, ok := env["A"]; ok {
+	WipeSecrets(env)
+
+	if _, ok := env.Bytes["A"]; ok {
 		t.Fatalf("secret key not deleted")
 	}
-	if env["B"] != 123 {
+	if env.Int["B"] != 123 {
 		t.Fatalf("non-secret key modified")
 	}
 	for _, b := range secret {

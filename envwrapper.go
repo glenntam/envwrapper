@@ -1,5 +1,5 @@
 // Package envwrapper is a godotenv wrapper that retrieves .env variables from a
-// map[slice]any and returns a new map with all the values in the correct type.
+// map[string]any and returns a struct categorized by data type.
 package envwrapper
 
 import (
@@ -13,18 +13,28 @@ import (
 )
 
 var (
-	errEnvMissing     = errors.New("required env variable missing or empty")
-	errEnvInvalidInt  = errors.New("env variable must be an integer")
-	errEnvInvalidBool = errors.New("env variable must be a boolean")
-	errEnvUnsupported = errors.New("unsupported env variable type")
+	errEnvMissing        = errors.New("required env variable missing or empty")
+	errEnvInvalidInt     = errors.New("env variable must be an integer")
+	errEnvInvalidBool    = errors.New("env variable must be a boolean")
+	errEnvUnsupported    = errors.New("unsupported env variable type")
+	errEnvNilUnsupported = errors.New("cannot use 'nil' as a required type. " +
+		"Only (*string)(nil), (*int)(nil), (*bool)(nil), (*[]byte)(nil) are supported")
 )
 
+// EnvParsed contains all the environment variables or the default values categorized by type.
+type EnvParsed struct {
+	Str   map[string]string
+	Int   map[string]int
+	Bool  map[string]bool
+	Bytes map[string][]byte
+}
+
 // Parse reads the structure of cfg, a map[string]any, and returns a pointer to a
-// new map where keys = 'string' and values = the corresponding environment variable
-// cast into the type stipulated by 'any'. The values of 'any' are the default fallbacks
-// if Load cannot find or cast the environment variable.
+// struct of parsed environment variables, categorized by type.
 //
 // string, int, bool, []byte are supported.
+//
+// Values in cfg are app-defined defaults, in case the environment variable doesn't exist.
 //
 // Example 1:
 //
@@ -35,9 +45,10 @@ var (
 //	    "USE_SSL":     true,
 //	}
 //	env := envwrapper.Parse(cfg)
-//	(e.g.) sendMail(env["MY_SERVER"].(string), env["MY_PORT"].(int), env["MY_PASSWORD"].([]byte), env["USE_SSL"].(bool))
+//	(e.g.) sendMail(env.Str["MY_SERVER"], env.Int["MY_PORT"], env.Bytes["MY_PASSWORD"], env.Bool["USE_SSL"])
 //
-// Also, required values without a stipulated default can be passed a nil pointer to that specific type:
+// Also, required values without a default value can be passed a nil pointer to that specific type:
+//
 // Example 2:
 //
 //	cfg := map[string]any{
@@ -61,15 +72,21 @@ var (
 //	defer envwrapper.WipeSecrets(env)
 //
 // envwrapper loads any .env file in the current path. Filenames are optional to manually load one or more .env files.
-func Parse(cfg map[string]any, filenames ...string) map[string]any {
+func Parse(cfg map[string]any, filenames ...string) *EnvParsed {
 	err := godotenv.Load(filenames...)
 	if err != nil {
 		panic(fmt.Errorf(".env not found: %w", err))
 	}
-	env := make(map[string]any, len(cfg))
+
+	env := &EnvParsed{
+		Str:   make(map[string]string),
+		Int:   make(map[string]int),
+		Bool:  make(map[string]bool),
+		Bytes: make(map[string][]byte),
+	}
 
 	for key, defaultKey := range cfg {
-		env[key] = resolve(key, defaultKey)
+		resolve(key, defaultKey, env)
 	}
 	return env
 }
@@ -83,49 +100,42 @@ func Parse(cfg map[string]any, filenames ...string) map[string]any {
 //	...
 //	env := envwrapper.Parse(cfg)
 //	defer envwrapper.WipeSecrets(env)
-func WipeSecrets(env *map[string]any) {
+func WipeSecrets(env *EnvParsed) {
 	if env == nil {
 		return
 	}
-	for key, val := range *env {
-		switch v := val.(type) {
-		case []byte:
-			for i := range v {
-				v[i] = 0
-			}
-			delete(*env, key)
-		case *[]byte:
-			if v != nil {
-				for i := range *v {
-					(*v)[i] = 0
-				}
-			}
-			delete(*env, key)
+	for key, val := range env.Bytes {
+		for i := range val {
+			val[i] = 0
 		}
+		delete(env.Bytes, key)
 	}
 }
 
-func resolve(key string, defaultKey any) any {
+func resolve(key string, defaultKey any, env *EnvParsed) {
+	if defaultKey == nil {
+		panic(fmt.Errorf("%w", errEnvNilUnsupported))
+	}
 	rawString, keyExists := os.LookupEnv(key)
 	rawString = strings.TrimSpace(rawString)
 
 	switch defaultKeyType := defaultKey.(type) {
 	case string:
-		return resolveString(keyExists, rawString, defaultKeyType)
+		env.Str[key] = resolveString(keyExists, rawString, defaultKeyType)
 	case *string:
-		return requireString(keyExists, rawString, key)
+		env.Str[key] = requireString(keyExists, rawString, key)
 	case int:
-		return resolveInt(keyExists, rawString, defaultKeyType)
+		env.Int[key] = resolveInt(keyExists, rawString, defaultKeyType)
 	case *int:
-		return requireInt(keyExists, rawString, key)
+		env.Int[key] = requireInt(keyExists, rawString, key)
 	case bool:
-		return resolveBool(keyExists, rawString, defaultKeyType)
+		env.Bool[key] = resolveBool(keyExists, rawString, defaultKeyType)
 	case *bool:
-		return requireBool(keyExists, rawString, key)
+		env.Bool[key] = requireBool(keyExists, rawString, key)
 	case []byte:
-		return resolveBytes(keyExists, rawString, defaultKeyType)
+		env.Bytes[key] = resolveBytes(keyExists, rawString, defaultKeyType)
 	case *[]byte:
-		return requireBytes(keyExists, rawString, key)
+		env.Bytes[key] = requireBytes(keyExists, rawString, key)
 	default:
 		panic(fmt.Errorf("%w: %s (%T)", errEnvUnsupported, key, defaultKey))
 	}
