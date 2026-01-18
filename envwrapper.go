@@ -1,5 +1,5 @@
-// Package envwrapper is a godotenv wrapper that retrieves .env variables from a
-// map[string]any and returns a struct categorized by data type.
+// Package envwrapper is a godotenv convenience wrapper. It's designed so user code can define fallbacks
+// and assign each variable's data type with a single map[string]any at compile time with zero surprises.
 package envwrapper
 
 import (
@@ -21,7 +21,8 @@ var (
 		"Only (*string)(nil), (*int)(nil), (*bool)(nil), (*[]byte)(nil) are supported")
 )
 
-// EnvParsed contains all the environment variables or the default values categorized by type.
+// EnvParsed returns all the environment variable values categorized by type.
+// The user-supplied cfg default values are used if the environment values are invalid.
 type EnvParsed struct {
 	Str   map[string]string
 	Int   map[string]int
@@ -30,11 +31,11 @@ type EnvParsed struct {
 }
 
 // Parse reads the structure of cfg, a map[string]any, and returns a pointer to a
-// struct of parsed environment variables, categorized by type.
+// struct (*EnvParsed) with environment variables categorized by type.
 //
 // string, int, bool, []byte are supported.
 //
-// Values in cfg are app-defined defaults, in case the environment variable doesn't exist.
+// Values in cfg are app-defined defaults, in case the environment variable doesn't exist or is invalid.
 //
 // Example 1:
 //
@@ -47,7 +48,7 @@ type EnvParsed struct {
 //	env := envwrapper.Parse(cfg)
 //	(e.g.) sendMail(env.Str["MY_SERVER"], env.Int["MY_PORT"], env.Bytes["MY_PASSWORD"], env.Bool["USE_SSL"])
 //
-// Also, required values without a default value can be passed a nil pointer to that specific type:
+// Also, required values without a default value can be passed a nil pointer to that specific type.
 //
 // Example 2:
 //
@@ -59,11 +60,11 @@ type EnvParsed struct {
 //	env := envwrapper.Parse(cfg)
 //
 // Any combination of example 1 and 2 is possible, where some values have a default fallback and some do not.
-// Failure to load or cast any required variable will panic.
+// By design, failure to load or cast any required variable will panic.
 //
-// Secrets, passwords, API keys, etc, should be saved as []bytes rather than strings,
-// since strings are immutable in Go. Optionally, call defer envwrapper.WipeSecrets(env) in main to
-// zero-out secrets on program close to prevent memory-dump leaks.
+// Secrets, passwords, API keys, etc, should be saved as []bytes rather than strings since
+// strings are immutable and value-copied in Go. Optionally, call defer envwrapper.WipeSecrets(env)
+// to zero-out secrets on program close to prevent memory-dump leaks.
 //
 // Example 3:
 //
@@ -72,6 +73,7 @@ type EnvParsed struct {
 //	defer envwrapper.WipeSecrets(env)
 //
 // envwrapper loads any .env file in the current path. Filenames are optional to manually load one or more .env files.
+// Duplicated environment variables will be overriden in the order the files are loaded, like godotenv.
 func Parse(cfg map[string]any, filenames ...string) *EnvParsed {
 	err := godotenv.Load(filenames...)
 	if err != nil {
@@ -91,9 +93,9 @@ func Parse(cfg map[string]any, filenames ...string) *EnvParsed {
 	return env
 }
 
-// WipeSecrets should be called as a deferred function in main after Parse if the secrets, passwords, or
-// API keys are passed into the env map. WipeSecrets zeros-out all instances of []byte and *[]byte and
-// then deletes the corresponding map entry. It is used to safeguard again memory-dump leaks.
+// WipeSecrets should be called as a deferred function in main after Parse() if any
+// secrets, passwords, or API keys are used. WipeSecrets zeros-out and deletes all
+// instances of []byte in EnvParsed. It is used to safeguard again memory-dump leaks.
 //
 // Example:
 //
